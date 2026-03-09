@@ -1,0 +1,90 @@
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+export interface DiseaseDiagnosis {
+  modelClass: string;
+  plantName: string;
+  diseaseName: string;
+  confidence: number;
+  description: string;
+  recommendations: string[];
+}
+
+const PLANT_VILLAGE_CLASSES = [
+  "Apple___Apple_scab", "Apple___Black_rot", "Apple___Cedar_apple_rust", "Apple___healthy",
+  "Blueberry___healthy", "Cherry_(including_sour)___Powdery_mildew", "Cherry_(including_sour)___healthy",
+  "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot", "Corn_(maize)___Common_rust_",
+  "Corn_(maize)___Northern_Leaf_Blight", "Corn_(maize)___healthy", "Grape___Black_rot",
+  "Grape___Esca_(Black_Measles)", "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)", "Grape___healthy",
+  "Orange___Haunglongbing_(Citrus_greening)", "Peach___Bacterial_spot", "Peach___healthy",
+  "Pepper,_bell___Bacterial_spot", "Pepper,_bell___healthy", "Potato___Early_blight",
+  "Potato___Late_blight", "Potato___healthy", "Raspberry___healthy", "Soybean___healthy",
+  "Squash___Powdery_mildew", "Strawberry___Leaf_scorch", "Strawberry___healthy",
+  "Tomato___Bacterial_spot", "Tomato___Early_blight", "Tomato___Late_blight", "Tomato___Leaf_Mold",
+  "Tomato___Septoria_leaf_spot", "Tomato___Spider_mites Two-spotted_spider_mite", "Tomato___Target_Spot",
+  "Tomato___Tomato_Yellow_Leaf_Curl_Virus", "Tomato___Tomato_mosaic_virus", "Tomato___healthy"
+];
+
+export async function analyzePlantImage(base64Image: string, mimeType: string): Promise<DiseaseDiagnosis> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: `You are a strict ResNet-50 CNN model trained exclusively on the PlantVillage dataset. You MUST classify the provided leaf image into EXACTLY ONE of the following 38 classes: ${PLANT_VILLAGE_CLASSES.join(', ')}. Do not output any other class name. Provide the exact 'modelClass' from the list, then extract the 'plantName' and 'diseaseName' from it. Also provide a confidence score (typically around 84-95%), a description, and recommendations.`,
+          },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            modelClass: {
+              type: Type.STRING,
+              description: "The exact class name from the PlantVillage 38 classes list.",
+            },
+            plantName: {
+              type: Type.STRING,
+              description: "The name of the plant identified.",
+            },
+            diseaseName: {
+              type: Type.STRING,
+              description: "The name of the disease identified, or 'healthy'.",
+            },
+            confidence: {
+              type: Type.NUMBER,
+              description: "The confidence level of the diagnosis as a percentage (0-100).",
+            },
+            description: {
+              type: Type.STRING,
+              description: "A brief description of the disease and its symptoms.",
+            },
+            recommendations: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.STRING,
+              },
+              description: "A list of recommended actions or treatments.",
+            },
+          },
+          required: ["modelClass", "plantName", "diseaseName", "confidence", "description", "recommendations"],
+        },
+      },
+    });
+
+    const jsonStr = response.text?.trim() || "{}";
+    return JSON.parse(jsonStr) as DiseaseDiagnosis;
+  } catch (error) {
+    console.error("Error analyzing image:", error);
+    throw new Error("Failed to analyze the image. Please try again.");
+  }
+}

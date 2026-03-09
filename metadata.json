@@ -1,0 +1,5 @@
+{
+  "name": "Plant Disease Detection System",
+  "description": "A web application for plant disease detection using image upload and diagnosis, featuring a modern UI and login page.",
+  "requestFramePermissions": []
+}
